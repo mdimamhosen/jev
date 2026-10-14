@@ -17,7 +17,7 @@
     "node": ">=20.12"
   },
   "scripts": {
-    "start": "node bin/jev.js serve",
+    "start": "node init && node bin/jev.js serve",
     "test": "node --test test/*.test.js",
     "deploy": "npx -y wrangler@4 deploy"
   },

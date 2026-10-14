@@ -66,7 +66,9 @@ export function serve({ name, version = '0.1.0', instructions, tools = [], resou
     if (pathname !== '/mcp') return Response.json({ name, version, mcp: '/mcp', tools: tools.map(t => t.name) }, { headers: cors })
     if (env.MCP_TOKEN && (req.headers.get('authorization') || '') !== `Bearer ${env.MCP_TOKEN}`)
       return Response.json({ error: 'unauthorized' }, { status: 401, headers: { ...cors, 'www-authenticate': 'Bearer' } })
-    if (req.method !== 'POST') return new Response('SSE stream not supported (stateless server)', { status: 405, headers: { ...cors, allow: 'POST' } })
+    if (req.method === 'GET' && !(req.headers.get('accept') || '').includes('text/event-stream')) return new Response(page(name, version, tools, req.url), { headers: { ...cors, 'content-type': 'text/html; charset=utf-8' } })
+    // Stateless server: no server-initiated stream. 405 is the spec's answer and clients fall back to POST.
+    if (req.method !== 'POST') return new Response(null, { status: 405, headers: { ...cors, allow: 'POST' } })
     let body
     try { body = await req.json() } catch { return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400, headers: cors }) }
     const out = Array.isArray(body) ? (await Promise.all(body.map(m => one(m, env)))).filter(Boolean) : await one(body, env)
@@ -75,5 +77,17 @@ export function serve({ name, version = '0.1.0', instructions, tools = [], resou
   }
   return { fetch, name, version, tools }
 }
+
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const page = (name, version, tools, url) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(name)} MCP</title>
+<style>:root{color-scheme:light dark;--bg:#f2f3ef;--fg:#15171a;--mut:#5b6168;--line:#d6d9d2;--code:#1b1e23}@media(prefers-color-scheme:dark){:root{--bg:#0f1114;--fg:#e8eaed;--mut:#9aa2ab;--line:#2a3038;--code:#0b0d10}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:720px;margin:0 auto;padding:48px max(16px,env(safe-area-inset-left))}
+h1{font-size:28px;margin:0 0 4px}p{color:var(--mut);margin:0 0 24px}h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:28px 0 8px}
+pre{background:var(--code);color:#dfe3e8;padding:12px 14px;border-radius:8px;overflow-x:auto;font:13px/1.6 ui-monospace,Menlo,monospace;margin:0 0 8px}li{margin:4px 0}code{font-family:ui-monospace,Menlo,monospace}</style>
+<main><h1>${esc(name)}</h1><p>MCP server v${esc(version)} · Streamable HTTP · this URL is meant for MCP clients, not browsers.</p>
+<h2>Claude Code</h2><pre>claude mcp add --transport http --scope user ${esc(name)} ${esc(url)}</pre>
+<h2>Codex</h2><pre>codex mcp add ${esc(name)} --url ${esc(url)}</pre>
+<h2>Cursor (~/.cursor/mcp.json)</h2><pre>{ "mcpServers": { "${esc(name)}": { "url": "${esc(url)}" } } }</pre>
+<h2>Tools</h2><ul>${tools.map(t => `<li><code>${esc(t.name)}</code> — ${esc(t.description || '')}</li>`).join('')}</ul></main>`
 
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-expose-headers': 'mcp-session-id' }

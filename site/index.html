@@ -533,7 +533,7 @@ jev setup --url https://jev.&lt;you&gt;.workers.dev --key &lt;your JEV key&gt;</
 <footer>
   <div class="wrap">
     <span>JEV · MIT licence · Prompts and responses are never stored.</span>
-    <span class="mono">npm i -g jevrouter</span>
+    <span><a href="https://github.com/mdimamhosen/jev">GitHub</a> · <a href="https://www.npmjs.com/package/jevrouter">npm</a> · <a href="https://jev-guide.jevrouter.workers.dev/mcp">jev-guide MCP</a></span>
   </div>
 </footer>
 
@@ -562,7 +562,7 @@ const classify = (t) => {
 const CLIENTS = {
   'claude-code': { path: 'POST /v1/messages', provider: 'anthropic', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], note: 'Runs natively on Anthropic’s own API, so the stream passes straight through.' },
   codex: { path: 'POST /v1/responses', provider: 'openai', models: ['gpt-5-mini', 'gpt-5', 'gpt-5'], note: 'Runs natively on OpenAI’s Responses API, so the stream passes straight through.' },
-  cursor: { path: 'POST /v1/chat/completions', provider: 'gemini', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-pro'], note: 'With only a free Gemini key set, JEV still routes, choosing between Flash and Pro.' },
+  cursor: { path: 'POST /v1/chat/completions', provider: 'gemini', models: ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-pro-latest'], note: 'With only a free Gemini key set, JEV still routes across three Gemini tiers.' },
 }
 const TIER = { 1: ['fast', 'var(--t1)'], 2: ['smart', 'var(--t2)'], 3: ['frontier', 'var(--t3)'] }
 let client = 'claude-code'
