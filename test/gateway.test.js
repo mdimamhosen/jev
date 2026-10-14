@@ -126,3 +126,20 @@ test('no keys → helpful 503', async () => {
   assert.equal(res.status, 503)
   assert.match((await res.json()).error.message, /GEMINI_API_KEY/)
 })
+
+test('Gemini thought signatures survive the round trip through Codex and Claude Code ids', async () => {
+  const sig = 'Ab+c/d=='
+  const withSig = [{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'f1', extra_content: { google: { thought_signature: sig } }, function: { name: 'shell', arguments: '{}' } }] } }] }, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }]
+  const env = { JEV_LOCAL: '1', GEMINI_API_KEY: 'g' }
+  mock(() => sse(withSig))
+  const ev = await events(await post('/v1/responses', { model: 'jev-fast', stream: true, input: 'run it', tools: [{ type: 'function', name: 'shell', parameters: { type: 'object' } }] }, env))
+  const callId = ev.find(e => e.type === 'response.output_item.done').item.call_id
+  assert.match(callId, /^f1__jevsig__[A-Za-z0-9_-]+$/)
+  mock(() => Response.json(chatReply))
+  await post('/v1/responses', { model: 'jev-fast', input: [{ role: 'user', content: 'run it' }, { type: 'function_call', call_id: callId, name: 'shell', arguments: '{}' }, { type: 'function_call_output', call_id: callId, output: 'ok' }, { type: 'function_call', call_id: 'old', name: 'shell', arguments: '{}' }, { type: 'function_call_output', call_id: 'old', output: 'ok' }] }, env)
+  const [a1, t1, a2] = calls[0].body.messages.slice(1)
+  assert.deepEqual(a1.tool_calls[0].extra_content, { google: { thought_signature: sig } })
+  assert.equal(a1.tool_calls[0].id, 'f1')
+  assert.equal(t1.tool_call_id, 'f1')
+  assert.equal(a2.tool_calls[0].extra_content.google.thought_signature, 'skip_thought_signature_validator')
+})

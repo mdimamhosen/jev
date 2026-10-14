@@ -1,5 +1,5 @@
 // Anthropic Messages (Claude Code) ⇄ OpenAI Chat Completions.
-import { sseJson, event, rid } from './sse.js'
+import { sseJson, event, rid, packId, restoreSignatures } from './sse.js'
 
 const str = (c) => typeof c === 'string' ? c : Array.isArray(c) ? c.map(b => b.text ?? '').join('\n') : JSON.stringify(c ?? '')
 
@@ -27,7 +27,7 @@ export function toChat(body) {
       .map(b => b.type === 'text' ? { type: 'text', text: b.text } : image(b))
     if (parts.length) messages.push({ role: 'user', content: parts.every(p => p.type === 'text') ? parts.map(p => p.text).join('\n') : parts })
   }
-  const out = { messages, stream: !!body.stream }
+  const out = { messages: restoreSignatures(messages), stream: !!body.stream }
   if (body.stream) out.stream_options = { include_usage: true }
   if (body.max_tokens) out.max_tokens = body.max_tokens
   // Server tools (web_search_…, etc.) have a dated `type`; only client tools translate.
@@ -48,7 +48,7 @@ export function fromChat(json, model) {
   const content = []
   if (c.message?.content) content.push({ type: 'text', text: c.message.content })
   for (const t of c.message?.tool_calls || [])
-    content.push({ type: 'tool_use', id: t.id || rid('toolu_'), name: t.function.name, input: parse(t.function.arguments) })
+    content.push({ type: 'tool_use', id: packId(t.id || rid('toolu_'), t), name: t.function.name, input: parse(t.function.arguments) })
   return {
     id: rid('msg_'), type: 'message', role: 'assistant', model, content,
     stop_reason: STOP[c.finish_reason] || 'end_turn', stop_sequence: null,
@@ -74,7 +74,7 @@ export async function* fromChatStream(stream, model) {
       const ti = t.index ?? 0
       if (!tools.has(ti)) {
         yield* close(); idx++; open = 'tool'; tools.set(ti, idx)
-        yield event('content_block_start', { index: idx, content_block: { type: 'tool_use', id: t.id || rid('toolu_'), name: t.function?.name, input: {} } })
+        yield event('content_block_start', { index: idx, content_block: { type: 'tool_use', id: packId(t.id || rid('toolu_'), t), name: t.function?.name, input: {} } })
       }
       if (t.function?.arguments) yield event('content_block_delta', { index: tools.get(ti), delta: { type: 'input_json_delta', partial_json: t.function.arguments } })
     }

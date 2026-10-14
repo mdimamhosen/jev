@@ -91,3 +91,13 @@ test('mcp server rejects bad args and enforces MCP_TOKEN', async () => {
   assert.equal((await call({ n: 2 }, { MCP_TOKEN: 's' })).status, 401)
   assert.equal((await call({ n: 2 }, { MCP_TOKEN: 's' }, { authorization: 'Bearer s' })).status, 200)
 })
+
+test('GET /mcp: browser gets an install page, SSE clients get 405', async () => {
+  const { serve } = await import('../src/mcp/runtime.js')
+  const s = serve({ name: 'demo<x>', tools: [{ name: 'a', description: 'b', run: () => 1 }] })
+  const html = await s.fetch(new Request('http://l/mcp', { headers: { accept: 'text/html' } }))
+  assert.equal(html.status, 200)
+  const body = await html.text()
+  assert.match(body, /claude mcp add --transport http --scope user demo&lt;x&gt; http:\/\/l\/mcp/)
+  assert.equal((await s.fetch(new Request('http://l/mcp', { headers: { accept: 'text/event-stream' } }))).status, 405)
+})

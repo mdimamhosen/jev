@@ -3,7 +3,7 @@ import { PROVIDERS, available } from './providers.js'
 import { route, recent, ALIASES } from './router.js'
 import * as A from './translate/anthropic.js'
 import * as R from './translate/responses.js'
-import { toStream } from './translate/sse.js'
+import { toStream, restoreSignatures } from './translate/sse.js'
 
 export const hooks = { onRoute: (e) => console.log(JSON.stringify(e)) }
 
@@ -39,6 +39,11 @@ async function upstream(model, proto, body, req, env, search) {
   else {
     payload = { ...(proto === 'anthropic' ? A.toChat(body) : R.toChat(body)), model: model.id }
     if (p.maxKey && payload.max_tokens) { payload[p.maxKey] = payload.max_tokens; delete payload.max_tokens }
+  }
+  if (model.provider === 'gemini' && target === 'chat') {
+    // Turns made by another model (or a client that dropped them) carry no signature; Gemini documents this placeholder.
+    for (const m of restoreSignatures(payload.messages || [])) for (const tc of m.tool_calls || [])
+      tc.extra_content ||= { google: { thought_signature: 'skip_thought_signature_validator' } }
   }
   if (target === 'anthropic') {
     url = `${base}/v1/messages${search}`

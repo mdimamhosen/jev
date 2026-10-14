@@ -272,6 +272,8 @@ jev deploy                                 jev mcp uninstall <name>
 | `401 Set the JEV_API_KEY secret` | Cloud deploy without a key: `npx wrangler secret put JEV_API_KEY`. |
 | Cursor can't connect | Cursor needs a public URL. Use `jev deploy`. |
 | Codex says "model metadata not found" | Expected for `jev-auto`; it's harmless. |
+| Gemini 400 "missing thought_signature" | Fixed in JEV: signatures travel inside tool-call ids. Update JEV if you see it. |
+| Browser shows an MCP install page | That's expected: MCP URLs are for clients. Copy the install command from the page. |
 | Something else | Run `jev doctor`, then `jev why`. |
 
 ## Architecture

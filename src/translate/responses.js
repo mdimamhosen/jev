@@ -1,5 +1,5 @@
 // OpenAI Responses (Codex) ⇄ OpenAI Chat Completions.
-import { sseJson, event, rid } from './sse.js'
+import { sseJson, event, rid, packId, restoreSignatures } from './sse.js'
 
 const text = (c) => typeof c === 'string' ? c : (c || []).map(p => p.text ?? '').join('')
 const parts = (c) => typeof c === 'string' ? c : c.some(p => p.type === 'input_image')
@@ -27,7 +27,7 @@ export function toChat(body) {
       messages.push({ role: 'tool', tool_call_id: it.call_id, content: typeof it.output === 'string' ? it.output : JSON.stringify(it.output) })
     // reasoning / web_search_call items are provider-specific and dropped.
   }
-  const out = { messages, stream: !!body.stream }
+  const out = { messages: restoreSignatures(messages), stream: !!body.stream }
   if (body.stream) out.stream_options = { include_usage: true }
   if (body.max_output_tokens) out.max_tokens = body.max_output_tokens
   const tools = (body.tools || []).flatMap(t =>
@@ -64,7 +64,7 @@ export function fromChat(json, model, req) {
   const custom = customNames(req)
   const output = []
   if (c.content) output.push(msgItem(rid('msg_'), c.content))
-  for (const t of c.tool_calls || []) output.push(callItem(t.id || rid('call_'), t.function.name, t.function.arguments || '{}', custom))
+  for (const t of c.tool_calls || []) output.push(callItem(packId(t.id || rid('call_'), t), t.function.name, t.function.arguments || '{}', custom))
   return shell(rid('resp_'), model, 'completed', output, usageOf(json.usage))
 }
 
@@ -104,7 +104,7 @@ export async function* fromChatStream(stream, model, req) {
       const ti = t.index ?? 0
       if (!calls.has(ti)) {
         yield* closeMsg()
-        const c = { callId: t.id || rid('call_'), name: t.function?.name || '', args: '', oi: output.length, fid: rid('fc_') }
+        const c = { callId: packId(t.id || rid('call_'), t), name: t.function?.name || '', args: '', oi: output.length, fid: rid('fc_') }
         calls.set(ti, c)
         output.push(null)
         yield ev('response.output_item.added', { output_index: c.oi, item: { type: 'function_call', id: c.fid, call_id: c.callId, name: c.name, arguments: '', status: 'in_progress' } })
