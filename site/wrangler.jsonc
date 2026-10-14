@@ -1,0 +1,6 @@
+// Website deploy (free): cd site && npx wrangler deploy
+{
+  "name": "jev-site",
+  "compatibility_date": "2025-09-01",
+  "assets": { "directory": "." }
+}

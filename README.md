@@ -6,6 +6,7 @@ A zero-dependency model router and MCP toolkit for **Claude Code**, **Codex** an
 - One key, one model name, `jev-auto`, works the same way in every client.
 - JEV picks a model for each request: cheap and fast for "rename this", frontier models for "debug this race condition".
 - Build, test, deploy and install MCP servers in four commands.
+- Website: **https://jev-site.jevrouter.workers.dev** · npm: [`jevrouter`](https://www.npmjs.com/package/jevrouter) · MCP Registry: [`io.github.mdimamhosen/jev-guide`](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.mdimamhosen/jev-guide)
 - About 1,400 lines of plain JavaScript with **no dependencies**. It starts in roughly 30 ms and runs on Node, Bun, Deno and **Cloudflare Workers (free)**.
 
 ```
@@ -233,7 +234,13 @@ Resources (`resources: [{ uri, name, read }]`) and prompts (`prompts: [{ name, d
 
 **Auth.** Set the `MCP_TOKEN` secret to require `Authorization: Bearer <token>`, then install with `--token <token>`.
 
-**Publishing to the official MCP Registry.** `jev mcp publish` validates `server.json` and prints the `mcp-publisher` steps.
+**Publishing to the official MCP Registry.** `jev mcp publish` validates `server.json`, logs in (reusing your `gh` login when present) and publishes with `mcp-publisher`.
+
+**Example:** [`examples/jev-guide`](examples/jev-guide) is live at `https://jev-guide.jevrouter.workers.dev/mcp` and listed in the official registry. It gives agents tools to route prompts, print client setup and install MCP servers:
+
+```sh
+claude mcp add --transport http --scope user jev-guide https://jev-guide.jevrouter.workers.dev/mcp
+```
 
 ---
 
