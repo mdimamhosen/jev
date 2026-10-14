@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JEV Router</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="One endpoint for every model, one CLI for every MCP tool. A zero-dependency router for Claude Code, Codex and Cursor.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a request travels left → right (client → JEV → model). The hero is a live router console; every section below follows that path. */
+:root {
+  --bg: #f2f3ef;          /* cool stone paper */
+  --surface: #fbfbf9;
+  --sunk: #e8eae4;
+  --ink: #15171a;
+  --muted: #5b6168;
+  --line: #d6d9d2;
+  --accent: #2443d0;      /* signal cobalt */
+  --accent-ink: #ffffff;
+  --t1: #0d7f63;          /* fast tier */
+  --t2: #2443d0;          /* smart tier */
+  --t3: #a8236f;          /* frontier tier */
+  --warn: #9a5b00;
+  --code: #1b1e23;        /* terminal panels stay dark in both themes */
+  --code-ink: #dfe3e8;
+  --code-muted: #8a929c;
+  --code-line: #2b3038;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+  --step--1: .875rem; --step-0: 1rem; --step-1: 1.25rem; --step-2: 1.6rem; --step-3: clamp(1.9rem, 4vw, 2.6rem); --step-4: clamp(2.5rem, 6.4vw, 4.6rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1114; --surface: #161a1f; --sunk: #1c2128; --ink: #e8eaed; --muted: #9aa2ab; --line: #2a3038;
+    --accent: #8197ff; --accent-ink: #0f1114; --t1: #3ccf9f; --t2: #8197ff; --t3: #f07ab8; --warn: #e5a54a;
+    --code: #0b0d10; --code-ink: #dfe3e8; --code-muted: #7d8590; --code-line: #232830;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1114; --surface: #161a1f; --sunk: #1c2128; --ink: #e8eaed; --muted: #9aa2ab; --line: #2a3038;
+  --accent: #8197ff; --accent-ink: #0f1114; --t1: #3ccf9f; --t2: #8197ff; --t3: #f07ab8; --warn: #e5a54a;
+  --code: #0b0d10; --code-ink: #dfe3e8; --code-muted: #7d8590; --code-line: #232830;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--step-0)/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -.02em; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, kbd, .mono { font-family: var(--mono); }
+:not(pre) > code { font-size: .88em; background: var(--sunk); padding: .1em .4em; border-radius: 5px; }
+.eyebrow { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- nav ---------- */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid transparent; transition: border-color .2s; }
+.nav.scrolled { border-bottom-color: var(--line); }
+.nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 800 1.25rem/1 var(--display); color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+.mark { width: 26px; height: 26px; flex: none; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: .95rem; font-weight: 500; }
+.nav-links a:hover { color: var(--ink); }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.icon-btn svg { width: 17px; height: 17px; }
+@media (max-width: 720px) { .nav-links a.opt { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { padding-block: 64px 72px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: start; }
+@media (max-width: 920px) { .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-block: 36px 56px; } }
+.hero h1 { font-size: var(--step-4); line-height: .98; font-weight: 800; margin-block: 18px 22px; }
+.hero h1 .route { color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 34ch; }
+.install { margin-top: 30px; display: flex; flex-direction: column; gap: 10px; max-width: 460px; }
+.cmd { display: flex; align-items: center; gap: 12px; background: var(--code); color: var(--code-ink); border-radius: var(--r); padding: 12px 12px 12px 16px; font: 500 .95rem/1.4 var(--mono); min-width: 0; }
+.cmd .p { color: var(--code-muted); user-select: none; }
+.cmd .t { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.copy { flex: none; font: 500 .78rem/1 var(--body); padding: 7px 10px; border-radius: 6px; border: 1px solid var(--code-line); background: transparent; color: var(--code-muted); cursor: pointer; }
+.copy:hover { color: var(--code-ink); border-color: var(--code-muted); }
+.copy.done { color: #3ccf9f; border-color: #3ccf9f; }
+.cta-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: .95rem; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 34px; font: 500 var(--step--1)/1.3 var(--mono); color: var(--muted); }
+.facts b { color: var(--ink); font-weight: 500; }
+
+/* ---------- console ---------- */
+.console { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 0 var(--line), 0 24px 48px -28px color-mix(in srgb, var(--ink) 35%, transparent); overflow: hidden; min-width: 0; }
+.console-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--sunk); border-radius: 8px; padding: 3px; gap: 2px; }
+.seg button { font: 500 .82rem/1 var(--body); border: 0; background: transparent; color: var(--muted); padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent); }
+.endpoint { font: 400 .78rem/1 var(--mono); color: var(--muted); }
+.console-body { padding: 16px; display: grid; gap: 14px; }
+.console label { font: 500 .78rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+#prompt { width: 100%; min-height: 76px; resize: vertical; font: 400 1rem/1.5 var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+#prompt:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 400 .82rem/1.2 var(--body); padding: 6px 10px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; text-align: left; }
+.chip:hover { color: var(--ink); border-color: var(--muted); }
+.decision { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; font-size: .92rem; align-items: baseline; }
+.decision dt { font: 500 .75rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.decision dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.tier-pill { display: inline-flex; align-items: center; gap: 6px; font: 500 .82rem/1 var(--mono); padding: 5px 9px; border-radius: 6px; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); }
+.tier-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.ladder { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rung { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: .8rem; color: var(--muted); transition: border-color .25s, background .25s, color .25s; min-width: 0; }
+.rung b { display: block; font: 600 .85rem/1.3 var(--body); color: var(--ink); margin-bottom: 2px; }
+.rung span { font-family: var(--mono); font-size: .72rem; overflow-wrap: anywhere; }
+.rung.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 9%, transparent); }
+.rung.on b { color: var(--c); }
+.header-line { background: var(--code); color: var(--code-ink); border-radius: 8px; padding: 10px 12px; font: 400 .8rem/1.5 var(--mono); overflow-x: auto; white-space: nowrap; }
+.header-line .k { color: var(--code-muted); }
+.saving { font-size: .85rem; color: var(--muted); }
+.saving b { color: var(--ink); font-weight: 600; }
+
+/* ---------- sections ---------- */
+section { padding-block: 88px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) { section { padding-block: 60px; } }
+.sec-head { display: grid; gap: 12px; max-width: 640px; margin-bottom: 40px; }
+.sec-head h2 { font-size: var(--step-3); font-weight: 700; line-height: 1.05; }
+.sec-head p { color: var(--muted); font-size: 1.08rem; }
+
+/* path diagram */
+.path { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 0; align-items: stretch; }
+@media (max-width: 860px) { .path { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 10px; align-content: center; padding: 8px 0; min-width: 0; }
+.node { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; min-width: 0; }
+.node b { display: block; font-weight: 600; }
+.node span { font: 400 .8rem/1.4 var(--mono); color: var(--muted); }
+.engine { position: relative; margin-inline: 36px; background: var(--ink); color: var(--bg); border-radius: 14px; padding: 22px; display: grid; gap: 4px; align-content: center; }
+.engine h3 { font-size: 1.35rem; margin-bottom: 10px; color: var(--bg); }
+.engine ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: st; }
+.engine li { counter-increment: st; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--bg) 16%, transparent); font-size: .93rem; }
+.engine li::before { content: counter(st); font: 500 .78rem/1.6 var(--mono); color: color-mix(in srgb, var(--bg) 55%, transparent); }
+.engine li b { font-weight: 600; }
+.engine li span { display: block; color: color-mix(in srgb, var(--bg) 66%, transparent); font-size: .85rem; }
+.engine::before, .engine::after { content: ""; position: absolute; top: 50%; width: 36px; height: 2px; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 10px); background-size: 20px 2px; animation: flow 1s linear infinite; }
+.engine::before { right: 100%; } .engine::after { left: 100%; }
+@keyframes flow { to { background-position: 20px 0; } }
+@media (max-width: 860px) { .engine { margin: 28px 0; } .engine::before, .engine::after { top: auto; left: 50%; right: auto; width: 2px; height: 28px; background: repeating-linear-gradient(180deg, var(--accent) 0 6px, transparent 6px 10px); animation: none; } .engine::before { bottom: 100%; } .engine::after { top: 100%; } }
+.providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.providers .node { padding: 10px 12px; }
+.tierkey { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+
+/* setup */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tab { font: 600 .95rem/1 var(--body); padding: 14px 16px; border: 0; background: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--ink); }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 40px; padding-top: 32px; }
+@media (max-width: 860px) { .panel { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; }
+.steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 500 .8rem/1 var(--mono); color: var(--muted); background: var(--surface); }
+.steps b { display: block; font-weight: 600; margin-bottom: 2px; }
+.steps p { color: var(--muted); font-size: .95rem; }
+.callout { margin-top: 24px; padding: 14px 16px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--ink); font-size: .92rem; border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.callout b { color: var(--warn); }
+
+/* code blocks */
+.term { position: relative; background: var(--code); color: var(--code-ink); border-radius: 12px; min-width: 0; overflow: hidden; }
+.term-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px 9px 16px; border-bottom: 1px solid var(--code-line); font: 400 .78rem/1 var(--mono); color: var(--code-muted); }
+.term pre { margin: 0; padding: 16px; overflow-x: auto; font: 400 .86rem/1.65 var(--mono); }
+.term .c { color: var(--code-muted); }
+.term .ok { color: #3ccf9f; }
+.term .sk { color: #8a929c; }
+.term .hl { color: #9fb0ff; }
+.term .wn { color: #e5a54a; }
+
+/* aliases */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; min-width: 560px; }
+th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 .75rem/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: var(--sunk); }
+td code { white-space: nowrap; }
+.yes { color: var(--t1); font-weight: 600; }
+.no { color: var(--t3); font-weight: 600; }
+.part { color: var(--warn); font-weight: 600; }
+.foot { margin-top: 14px; font-size: .88rem; color: var(--muted); max-width: 70ch; }
+
+/* MCP */
+.mcp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 40px; align-items: start; }
+@media (max-width: 860px) { .mcp { grid-template-columns: minmax(0, 1fr); } }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: f; }
+.flow li { counter-increment: f; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.flow li:first-child { border-top: 0; padding-top: 0; }
+.flow li::before { content: "0" counter(f); font: 500 .85rem/1.9 var(--mono); color: var(--accent); }
+.flow code.big { display: inline-block; font-size: .95rem; background: none; padding: 0; font-weight: 500; color: var(--ink); margin-bottom: 4px; }
+.flow p { color: var(--muted); font-size: .93rem; }
+.clients3 { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag { font: 500 .75rem/1 var(--mono); padding: 5px 8px; border-radius: 5px; background: var(--sunk); color: var(--muted); }
+
+/* free cloud */
+.cloud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 28px; }
+@media (max-width: 900px) { .cloud { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cloud { grid-template-columns: minmax(0, 1fr); } }
+.cloud .node b { margin-bottom: 4px; }
+.cloud .node p { color: var(--muted); font-size: .9rem; }
+.cloud .price { font: 500 .78rem/1 var(--mono); color: var(--t1); display: block; margin-bottom: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.cloud .price.none { color: var(--muted); }
+
+/* closing */
+.closing { text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; }
+@media (max-width: 720px) { .closing { grid-template-columns: minmax(0, 1fr); } }
+.closing h2 { font-size: var(--step-3); }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 20px; border-radius: 9px; font-weight: 600; text-decoration: none; background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:hover { filter: brightness(1.06); }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+footer { padding-block: 28px 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
+footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="JEV home">
+      <svg class="mark" viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--ink)"/><path d="M6 13h5l4-6h5M11 13l4 6h5" stroke="var(--bg)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="13" r="2" fill="var(--accent)"/></svg>
+      JEV
+    </a>
+    <div class="nav-links">
+      <a class="opt" href="#how">How it works</a>
+      <a class="opt" href="#setup">Setup</a>
+      <a class="opt" href="#mcp">MCP</a>
+      <a class="opt" href="#cloud">Free cloud</a>
+      <a href="https://github.com/mdimamhosen/jev">GitHub</a>
+      <button class="icon-btn" id="theme" type="button" aria-label="Toggle colour theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <span class="eyebrow">Model router for coding agents</span>
+      <h1>Every prompt, <span class="route">routed</span> to the right model.</h1>
+      <p class="lede">One endpoint and one model name, <code>jev-auto</code>, for Claude Code, Codex and Cursor. Renames go to a fast model; race conditions go to a frontier one.</p>
+      <div class="install">
+        <div class="cmd"><span class="p">$</span><span class="t">npm install -g jevrouter</span><button class="copy" type="button" data-copy="npm install -g jevrouter">Copy</button></div>
+        <div class="cmd"><span class="p">$</span><span class="t">jev serve &amp;&amp; jev setup</span><button class="copy" type="button" data-copy="jev serve &amp;&amp; jev setup">Copy</button></div>
+        <div class="cta-row"><a href="#setup">Step-by-step setup →</a><a href="#cloud">Deploy free on Cloudflare</a></div>
+      </div>
+      <div class="facts" aria-label="Project facts">
+        <span><b>0</b> dependencies</span><span><b>~30 ms</b> startup</span><span><b>9</b> providers</span><span><b>MIT</b> licence</span>
+      </div>
+    </div>
+
+    <div class="console" aria-label="Live router demo">
+      <div class="console-head">
+        <div class="seg" role="group" aria-label="Client">
+          <button type="button" aria-pressed="true" data-client="claude-code">Claude Code</button>
+          <button type="button" aria-pressed="false" data-client="codex">Codex</button>
+          <button type="button" aria-pressed="false" data-client="cursor">Cursor</button>
+        </div>
+        <span class="endpoint" id="endpoint">POST /v1/messages</span>
+      </div>
+      <div class="console-body">
+        <div>
+          <label for="prompt">Prompt</label>
+          <textarea id="prompt" spellcheck="false">Debug this race condition in the job queue across the repo</textarea>
+        </div>
+        <div class="chips" aria-label="Example prompts">
+          <button class="chip" type="button">Rename userId to accountId</button>
+          <button class="chip" type="button">Explain what this regex does</button>
+          <button class="chip" type="button">Fix the failing test in parser.ts</button>
+          <button class="chip" type="button">Review the auth flow for security vulnerabilities</button>
+        </div>
+        <dl class="decision" aria-live="polite">
+          <dt>Task</dt><dd id="o-task">hard_debugging</dd>
+          <dt>Tier</dt><dd><span class="tier-pill" id="o-tier" style="--c: var(--t3)">frontier</span></dd>
+          <dt>Model</dt><dd id="o-model" class="mono">anthropic/claude-opus-5-5</dd>
+        </dl>
+        <div class="ladder" aria-hidden="true">
+          <div class="rung" data-t="1" style="--c: var(--t1)"><b>Fast</b><span id="r1">claude-haiku-5-5</span></div>
+          <div class="rung" data-t="2" style="--c: var(--t2)"><b>Smart</b><span id="r2">claude-sonnet-5-5</span></div>
+          <div class="rung on" data-t="3" style="--c: var(--t3)"><b>Frontier</b><span id="r3">claude-opus-5-5</span></div>
+        </div>
+        <div class="header-line" id="o-header"><span class="k">x-jev-route:</span> anthropic/claude-opus-5-5; task=hard_debugging; tier=3</div>
+        <p class="saving" id="o-saving">Runs natively on Anthropic's own API, so the stream passes straight through.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">How a request moves</span>
+      <h2>Your agent talks to JEV. JEV picks the model.</h2>
+      <p>JEV routes with a few rules that run in microseconds, with no extra LLM call. When the model speaks the client's protocol, bytes stream through untouched. When it doesn't, JEV translates both ways, including tool calls.</p>
+    </div>
+    <div class="path">
+      <div class="col">
+        <div class="node"><b>Claude Code</b><span>Anthropic Messages</span></div>
+        <div class="node"><b>Codex</b><span>OpenAI Responses</span></div>
+        <div class="node"><b>Cursor</b><span>OpenAI Chat</span></div>
+      </div>
+      <div class="engine">
+        <h3>jev-auto</h3>
+        <ol>
+          <li><div><b>Constraints</b><span>Key present, context fits, supports tools and vision</span></div></li>
+          <li><div><b>Classify</b><span>Rename, debug, refactor, review… sets the tier</span></div></li>
+          <li><div><b>Rank</b><span>Closest tier, native protocol first, then price</span></div></li>
+          <li><div><b>Stick</b><span>Tool loops stay on one model, which keeps caches warm</span></div></li>
+          <li><div><b>Recover</b><span>429 or 5xx falls back; repeated tool errors move up a tier</span></div></li>
+        </ol>
+      </div>
+      <div class="col">
+        <div class="providers">
+          <div class="node"><b>Anthropic</b></div><div class="node"><b>OpenAI</b></div>
+          <div class="node"><b>Gemini</b></div><div class="node"><b>DeepSeek</b></div>
+          <div class="node"><b>Groq</b></div><div class="node"><b>Cerebras</b></div>
+          <div class="node"><b>OpenRouter</b></div><div class="node"><b>Mistral</b></div>
+        </div>
+        <div class="node"><b>Ollama</b><span>local models, no data leaves your machine</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="setup">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Setup</span>
+      <h2>Two commands, then use your tools as usual.</h2>
+      <p><code>jev setup</code> finds your clients, backs up their config and points them at JEV. <code>jev uninstall-config</code> restores every file exactly.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Client setup">
+      <button class="tab" role="tab" id="tab-claude" aria-controls="p-claude" aria-selected="true">Claude Code</button>
+      <button class="tab" role="tab" id="tab-codex" aria-controls="p-codex" aria-selected="false" tabindex="-1">Codex</button>
+      <button class="tab" role="tab" id="tab-cursor" aria-controls="p-cursor" aria-selected="false" tabindex="-1">Cursor</button>
+      <button class="tab" role="tab" id="tab-any" aria-controls="p-any" aria-selected="false" tabindex="-1">Any client</button>
+    </div>
+
+    <div class="panel" role="tabpanel" id="p-claude" aria-labelledby="tab-claude">
+      <ol class="steps">
+        <li><div><b>Install and add a key</b><p>Any provider works. Gemini and Groq have free tiers.</p></div></li>
+        <li><div><b>Start JEV</b><p><code>jev serve</code> listens on 127.0.0.1:4000.</p></div></li>
+        <li><div><b>Run <code>jev setup</code></b><p>This writes six env entries into <code>~/.claude/settings.json</code>. Then run <code>claude</code> as normal.</p></div></li>
+      </ol>
+      <div class="term"><div class="term-bar">~/.claude/settings.json<button class="copy" type="button" data-target="c-claude">Copy</button></div><pre id="c-claude">{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:4000",
+    "ANTHROPIC_AUTH_TOKEN": "&lt;your JEV key&gt;",
+    "ANTHROPIC_MODEL": "jev-auto",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "jev-auto",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "jev-smart",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "jev-fast"
+  }
+}</pre></div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="p-codex" aria-labelledby="tab-codex" hidden>
+      <ol class="steps">
+        <li><div><b>Start JEV</b><p><code>jev serve</code></p></div></li>
+        <li><div><b>Run <code>jev setup</code></b><p>This adds a marked provider block that uses the Responses wire format. An existing <code>model</code> line is commented out, not deleted.</p></div></li>
+        <li><div><b>Run <code>codex</code></b><p>To try one model directly, run <code>codex -m jev-smart</code>.</p></div></li>
+      </ol>
+      <div class="term"><div class="term-bar">~/.codex/config.toml<button class="copy" type="button" data-target="c-codex">Copy</button></div><pre id="c-codex">model = "jev-auto"
+model_provider = "jev"
+
+[model_providers.jev]
+name = "JEV"
+base_url = "http://127.0.0.1:4000/v1"
+wire_api = "responses"</pre></div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="p-cursor" aria-labelledby="tab-cursor" hidden>
+      <ol class="steps">
+        <li><div><b>Deploy JEV to a public URL</b><p>Cursor sends requests from its own servers, so it can't reach localhost. <a href="#cloud">Deploy free on Cloudflare</a>.</p></div></li>
+        <li><div><b>Paste three values</b><p>Go to Settings → Models → API Keys. <code>jev setup</code> copies them to your clipboard.</p></div></li>
+        <li><div><b>Choose <code>jev-auto</code></b><p>Pick it in the Chat or Agent model menu.</p></div></li>
+      </ol>
+      <div>
+        <div class="term"><div class="term-bar">Cursor → Settings → Models<button class="copy" type="button" data-target="c-cursor">Copy</button></div><pre id="c-cursor">OpenAI API Key             &lt;your JEV key&gt;
+Override OpenAI Base URL   https://jev.&lt;you&gt;.workers.dev/v1
+Custom model               jev-auto</pre></div>
+        <p class="callout"><b>Not routed:</b> Cursor Tab and other Cursor-owned features always use Cursor's own models. JEV handles Chat and Agent requests.</p>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="p-any" aria-labelledby="tab-any" hidden>
+      <ol class="steps">
+        <li><div><b>Use the JEV URL as the base URL</b><p>The three endpoints are <code>/v1/messages</code>, <code>/v1/responses</code> and <code>/v1/chat/completions</code>.</p></div></li>
+        <li><div><b>Use a JEV model name</b><p><code>jev-auto</code>, or any exact model such as <code>openai/gpt-5</code>.</p></div></li>
+        <li><div><b>Read the route</b><p>Every response carries an <code>x-jev-route</code> header, and <code>jev why</code> explains the decision.</p></div></li>
+      </ol>
+      <div class="term"><div class="term-bar">curl<button class="copy" type="button" data-target="c-any">Copy</button></div><pre id="c-any">curl http://127.0.0.1:4000/v1/chat/completions \
+  -H "Authorization: Bearer $JEV_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"model":"jev-auto","messages":[{"role":"user","content":"Explain this regex"}]}'</pre></div>
+    </div>
+  </div>
+</section>
+
+<section id="models">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Model names</span>
+      <h2>Five names that work in every client.</h2>
+      <p>Set it once. Change behaviour by changing the name, not the provider.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>What it does</th><th>Use it for</th></tr></thead>
+        <tbody>
+          <tr><td><code>jev-auto</code></td><td>Classifies each prompt and picks the tier</td><td>Everything (the default)</td></tr>
+          <tr><td><code>jev-fast</code></td><td>Fast tier only</td><td>Titles, small edits, quick answers</td></tr>
+          <tr><td><code>jev-smart</code></td><td>Frontier tier only</td><td>Hard bugs, architecture, security work</td></tr>
+          <tr><td><code>jev-cheap</code></td><td>Lowest-priced available model</td><td>Bulk or background jobs</td></tr>
+          <tr><td><code>jev-free</code></td><td>Free-tier and local providers only</td><td>Zero spend; with Ollama alone, fully offline</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="compat">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Compatibility</span>
+      <h2>What works today.</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>Claude Code</th><th>Codex</th><th>Cursor</th></tr></thead>
+        <tbody>
+          <tr><td>Routing through JEV</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Chat and Agent</td></tr>
+          <tr><td>Automatic setup</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="part">Paste 3 values</td></tr>
+          <tr><td>Streaming and tool calls</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Fallback and escalation</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Works with local <code>jev serve</code></td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">Needs a public URL</td></tr>
+          <tr><td>Tab completion</td><td>n/a</td><td>n/a</td><td class="no">Handled by Cursor</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="mcp">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">MCP toolkit</span>
+      <h2>Turn an API into tools your agent can use.</h2>
+      <p>Start from a template or an OpenAPI spec. Generated servers are one file with no dependencies, and they run free on Cloudflare Workers.</p>
+    </div>
+    <div class="mcp">
+      <ol class="flow">
+        <li><div><code class="big">jev mcp import openapi.json</code><p>Each operation becomes a tool. DELETE, admin and internal endpoints are skipped unless you pass <code>--all</code>.</p></div></li>
+        <li><div><code class="big">jev mcp test .</code><p>Runs the handshake, checks schemas and calls every read-only tool, all without starting a server.</p></div></li>
+        <li><div><code class="big">jev mcp lint .</code><p>Scores names and descriptions, marks tools read-only, write or destructive, and blocks committed secrets.</p></div></li>
+        <li><div><code class="big">jev mcp deploy</code><p>Gives you a free public URL on workers.dev.</p></div></li>
+        <li><div><code class="big">jev mcp install pets &lt;url&gt;</code><p>Adds the server to every client it finds and prints a one-click Cursor link.</p><div class="clients3"><span class="tag">Claude Code</span><span class="tag">Codex</span><span class="tag">Cursor</span></div></div></li>
+      </ol>
+      <div class="term">
+        <div class="term-bar">jev mcp import petstore.json<span>real output</span></div>
+<pre><span class="c">$</span> jev mcp import petstore.json
+
+  4 endpoints → 2 tools
+  <span class="ok">[x]</span> get_pet_by_id         GET /pet/{petId}
+  <span class="ok">[x]</span> find_pets_by_status   GET /pet/findByStatus
+  <span class="sk">[ ] DELETE /pet/{petId}   skipped: destructive</span>
+  <span class="sk">[ ] POST /admin/flush     skipped: internal</span>
+
+<span class="c">$</span> jev mcp test pet-store-mcp
+
+  <span class="ok">✓</span> initialize → pet-store-mcp 0.1.0
+  <span class="ok">✓</span> tools/list → 2 tools
+  <span class="ok">✓</span> get_pet_by_id: schema valid
+  <span class="ok">✓</span> get_pet_by_id({"petId":1}) → 1423 ms
+  <span class="wn">⚠</span> find_pets_by_status({}) → 400 missing `status`
+
+  8 passed, 1 warnings, 0 failed
+
+<span class="c">$</span> jev mcp lint pet-store-mcp
+
+  MCP tool quality: <span class="hl">82/100</span>
+  <span class="wn">⚠</span> get_pet_by_id   READ_ONLY   parameters without description: petId</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cloud">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Free cloud</span>
+      <h2>Run it in the cloud for $0.</h2>
+      <p>The same code runs on Cloudflare Workers' free plan, which allows 100,000 requests a day with no cold starts. JEV refuses every request until you set a key, so it never runs as an open proxy.</p>
+    </div>
+    <div class="term"><div class="term-bar">Deploy<button class="copy" type="button" data-target="c-deploy">Copy</button></div><pre id="c-deploy">npx wrangler login
+jev deploy                                   <span class="c"># prints your JEV key</span>
+npx wrangler secret put GEMINI_API_KEY       <span class="c"># once per provider key</span>
+jev setup --url https://jev.&lt;you&gt;.workers.dev --key &lt;your JEV key&gt;</pre></div>
+    <div class="cloud">
+      <div class="node"><span class="price">Free</span><b>Hosting</b><p>Cloudflare Workers is the main target. Deno Deploy and Vercel Edge run the same file.</p></div>
+      <div class="node"><span class="price">Free tiers</span><b>Models</b><p>Gemini, Groq, Cerebras and OpenRouter <code>:free</code> models. Use <code>jev-free</code> to stay on them.</p></div>
+      <div class="node"><span class="price">Always free</span><b>A VM for local models</b><p>Oracle Cloud's ARM VM can run small Ollama models on its CPU.</p></div>
+      <div class="node"><span class="price none">No good option</span><b>GPUs</b><p>There's no reliable free GPU for serving models. Colab and Kaggle forbid it, so use the free APIs instead.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap closing">
+    <div class="sec-head" style="margin:0">
+      <h2>Stop choosing models by hand.</h2>
+      <p>Install JEV, run <code>jev setup</code>, and keep working.</p>
+    </div>
+    <div class="btns">
+      <a class="btn" href="#setup">Get started</a>
+      <a class="btn ghost" href="https://github.com/mdimamhosen/jev">Read the README</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>JEV · MIT licence · Prompts and responses are never stored.</span>
+    <span class="mono">npm i -g jevrouter</span>
+  </div>
+</footer>
+
+<script>
+// Same rules as src/router.js — the demo runs the real classifier.
+const RULES = [
+  [/architect|system design|distributed|from scratch/i, 'architecture', 3],
+  [/race condition|deadlock|concurren|memory leak|root cause|heisenbug/i, 'hard_debugging', 3],
+  [/security|vulnerab|exploit|injection|\bauth(entication|orization)? (flow|bypass)/i, 'security_review', 3],
+  [/refactor|migrat|across (the )?(whole |entire )?(repo|codebase|project)/i, 'refactor', 3],
+  [/rename|typo|docstring|add (a )?comment|format(ting)?\b|lint|one.?liner|commit message/i, 'simple_edit', 1],
+  [/explain|what (does|is)|summar|translate|how do i/i, 'explanation', 1],
+  [/debug|fix|bug|error|fail|broken|crash|stack ?trace|exception/i, 'debugging', 2],
+  [/\btests?\b|spec|coverage/i, 'tests', 2],
+  [/review/i, 'code_review', 2],
+  [/implement|build|create|add|write|feature|endpoint|component|function|class|script/i, 'code_generation', 2],
+]
+const classify = (t) => {
+  for (const [re, task, tier] of RULES) {
+    if (tier === 1 && t.length > 600) continue
+    if (re.test(t)) return { task, tier }
+  }
+  return { task: 'general', tier: 2 }
+}
+// Example catalogue: what JEV picks when each client's native provider key is set.
+const CLIENTS = {
+  'claude-code': { path: 'POST /v1/messages', provider: 'anthropic', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'], note: 'Runs natively on Anthropic’s own API, so the stream passes straight through.' },
+  codex: { path: 'POST /v1/responses', provider: 'openai', models: ['gpt-5-mini', 'gpt-5', 'gpt-5'], note: 'Runs natively on OpenAI’s Responses API, so the stream passes straight through.' },
+  cursor: { path: 'POST /v1/chat/completions', provider: 'gemini', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-pro'], note: 'With only a free Gemini key set, JEV still routes, choosing between Flash and Pro.' },
+}
+const TIER = { 1: ['fast', 'var(--t1)'], 2: ['smart', 'var(--t2)'], 3: ['frontier', 'var(--t3)'] }
+let client = 'claude-code'
+const $ = (id) => document.getElementById(id)
+const prompt = $('prompt')
+
+function render() {
+  const c = CLIENTS[client]
+  const { task, tier } = classify(prompt.value)
+  const model = `${c.provider}/${c.models[tier - 1]}`
+  $('endpoint').textContent = c.path
+  $('o-task').textContent = task
+  const pill = $('o-tier')
+  pill.textContent = TIER[tier][0]
+  pill.style.setProperty('--c', TIER[tier][1])
+  $('o-model').textContent = model
+  c.models.forEach((m, i) => { $('r' + (i + 1)).textContent = m })
+  document.querySelectorAll('.rung').forEach(r => r.classList.toggle('on', +r.dataset.t === tier))
+  $('o-header').innerHTML = `<span class="k">x-jev-route:</span> ${model}; task=${task}; tier=${tier}`
+  $('o-saving').textContent = tier === 1 ? 'A small task goes to the fast tier, which typically costs 5 to 20 times less than a frontier model.' : c.note
+}
+prompt.addEventListener('input', render)
+document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { prompt.value = b.textContent; render() }))
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  client = b.dataset.client
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b))
+  render()
+}))
+render()
+
+// Tabs (ARIA pattern with arrow-key support)
+const tabs = [...document.querySelectorAll('.tab')]
+function select(tab) {
+  tabs.forEach(t => {
+    const on = t === tab
+    t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1
+    $(t.getAttribute('aria-controls')).hidden = !on
+  })
+}
+tabs.forEach((t, i) => {
+  t.addEventListener('click', () => select(t))
+  t.addEventListener('keydown', e => {
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    if (d) { const n = tabs[(i + d + tabs.length) % tabs.length]; select(n); n.focus() }
+  })
+})
+if (location.hash && /^#(claude|codex|cursor|any)$/.test(location.hash)) select($('tab-' + location.hash.slice(1)))
+
+// Copy buttons
+document.querySelectorAll('.copy[data-copy], .copy[data-target]').forEach(b => b.addEventListener('click', async () => {
+  const src = b.dataset.target ? $(b.dataset.target) : null
+  const text = src ? src.innerText : b.dataset.copy
+  try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; b.classList.add('done') }
+  catch { if (src) { const r = document.createRange(); r.selectNodeContents(src); const s = getSelection(); s.removeAllRanges(); s.addRange(r) } b.textContent = 'Press ⌘C' }
+  setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done') }, 1600)
+}))
+
+// Theme toggle: system → opposite of system → back to system
+const root = document.documentElement
+const sysDark = () => matchMedia('(prefers-color-scheme: dark)').matches
+try { const saved = localStorage.getItem('jev-theme'); if (saved) root.dataset.theme = saved } catch {}
+$('theme').addEventListener('click', () => {
+  const current = root.dataset.theme || (sysDark() ? 'dark' : 'light')
+  const next = current === 'dark' ? 'light' : 'dark'
+  root.dataset.theme = next
+  try { localStorage.setItem('jev-theme', next) } catch {}
+})
+
+// Nav border once scrolled
+const nav = $('nav')
+addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true })
+</script>
+</body>
+</html>

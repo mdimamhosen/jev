@@ -1,0 +1,4 @@
+name = "jev-guide"
+main = "server.js"
+compatibility_date = "2025-09-01"
+# Secrets: npx wrangler secret put API_KEY   |   npx wrangler secret put MCP_TOKEN (require auth)

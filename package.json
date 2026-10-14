@@ -1,0 +1,48 @@
+{
+  "name": "jevrouter",
+  "version": "0.1.0",
+  "description": "One endpoint for every model, one CLI for every MCP \u2014 a zero-dependency router for Claude Code, Codex and Cursor.",
+  "type": "module",
+  "bin": {
+    "jev": "bin/jev.js",
+    "jevrouter": "bin/jev.js"
+  },
+  "main": "src/app.js",
+  "files": [
+    "bin",
+    "src",
+    "wrangler.toml"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node bin/jev.js serve",
+    "test": "node --test test/*.test.js",
+    "deploy": "npx -y wrangler@4 deploy"
+  },
+  "license": "MIT",
+  "keywords": [
+    "llm",
+    "router",
+    "gateway",
+    "claude-code",
+    "codex",
+    "cursor",
+    "mcp",
+    "model-context-protocol",
+    "openai",
+    "anthropic",
+    "gemini",
+    "cloudflare-workers"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdimamhosen/jev.git"
+  },
+  "homepage": "https://github.com/mdimamhosen/jev#readme",
+  "bugs": {
+    "url": "https://github.com/mdimamhosen/jev/issues"
+  },
+  "author": "mdimamhosen"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "jev-guide",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "jev mcp dev",
+    "test": "jev mcp test .",
+    "lint": "jev mcp lint .",
+    "deploy": "npx wrangler deploy"
+  }
+}

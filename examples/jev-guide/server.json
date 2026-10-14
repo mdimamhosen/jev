@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.mdimamhosen/jev-guide",
+  "description": "Set up the JEV model router for Claude Code, Codex and Cursor, and install MCP servers.",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://jev-guide.jevrouter.workers.dev/mcp"
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/mdimamhosen/jev",
+    "source": "github",
+    "subfolder": "examples/jev-guide"
+  },
+  "websiteUrl": "https://github.com/mdimamhosen/jev"
+}
